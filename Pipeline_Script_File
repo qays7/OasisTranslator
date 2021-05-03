@@ -1,0 +1,34 @@
+def remote = [:]
+remote.name = "jenkins"
+remote.host = "192.168.99.100"
+remote.allowAnyHosts = true
+
+node {
+           
+        stage ("Git Check Out") {
+            git changelog: false, credentialsId: 'get-hub-id', poll: false, url: 'https://github.com/qays7/OasisTranslator.git'
+        }
+        
+        stage ("Build") {
+          bat label: '', script: 'mvn package'
+          
+        }
+        
+		stage("Deploy SpringBoot App!") {
+			  withCredentials([sshUserPrivateKey(credentialsId: 'jenkins-id', keyFileVariable: 'identity', passphraseVariable: '', usernameVariable: 'jenkins')]) {
+				  remote.user = jenkins
+				  remote.identityFile = identity
+			
+				  sshCommand remote: remote, command: 'mkdir deployment', failOnError:'false'
+				  sshPut remote: remote, from: 'kill-boot.sh', into: '/home/jenkins/deployment'
+				  sshPut remote: remote, from: 'deploy.sh', into: '/home/jenkins/deployment'
+				  sshCommand remote: remote, command: 'cd /home/jenkins/deployment;dos2unix kill-boot.sh; chmod 777 kill-boot.sh; ./kill-boot.sh'
+				  sshCommand remote: remote, command: 'rm /home/jenkins/deployment/*.jar', failOnError:'false'
+				  sshPut remote: remote, from: 'target/OasisTranslator-0.0.1.jar', into: '/home/jenkins/deployment/'
+				  sshCommand remote: remote, command: 'cd /home/jenkins/deployment; dos2unix deploy.sh; chmod 777 deploy.sh;./deploy.sh'
+				  sshRemove remote: remote, path: '/home/jenkins/deployment/kill-boot.sh'
+				  sshRemove remote: remote, path: '/home/jenkins/deployment/deploy.sh'
+			  }
+        
+      }
+}
